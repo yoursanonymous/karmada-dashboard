@@ -17,8 +17,11 @@ limitations under the License.
 package router
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
+	"github.com/karmada-io/dashboard/pkg/client"
 	"github.com/karmada-io/dashboard/pkg/environment"
 )
 
@@ -42,11 +45,9 @@ func init() {
 	member.Use(EnsureMemberClusterMiddleware())
 
 	router.GET("/livez", func(c *gin.Context) {
-		c.String(200, "livez")
+		c.String(http.StatusOK, "ok")
 	})
-	router.GET("/readyz", func(c *gin.Context) {
-		c.String(200, "readyz")
-	})
+	router.GET("/readyz", client.HealthCheckHandler)
 }
 
 // V1 returns the router group for /api/v1 which for resources in control plane endpoints.

@@ -42,7 +42,7 @@ func handleGetMemberDeploymentDetail(c *gin.Context) {
 	memberClient := client.InClusterClientForMemberCluster(c.Param("clustername"))
 	namespace := c.Param("namespace")
 	name := c.Param("deployment")
-	result, err := deployment.GetDeploymentDetail(memberClient, namespace, name)
+	result, err := deployment.GetDeploymentDetail(memberClient, nil, namespace, name)
 	if err != nil {
 		common.Fail(c, err)
 		return

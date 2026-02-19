@@ -91,7 +91,8 @@ func handleGetDeploymentDetail(c *gin.Context) {
 		common.Fail(c, err)
 		return
 	}
-	result, err := deployment.GetDeploymentDetail(k8sClient, namespace, name)
+	karmadaClient, _ := router.GetKarmadaClientFromContext(c)
+	result, err := deployment.GetDeploymentDetail(k8sClient, karmadaClient, namespace, name)
 	if err != nil {
 		common.Fail(c, err)
 		return

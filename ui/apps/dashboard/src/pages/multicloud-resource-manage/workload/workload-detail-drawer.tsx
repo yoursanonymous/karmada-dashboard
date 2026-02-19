@@ -23,6 +23,7 @@ import {
   Table,
   TableColumnProps,
   Typography,
+  Tabs,
 } from 'antd';
 import {
   GetWorkloadDetail,
@@ -36,6 +37,7 @@ import { WorkloadKind } from '@/services/base.ts';
 import { cn } from '@/utils/cn';
 import TagList, { convertLabelToTags } from '@/components/tag-list';
 import { calculateDuration } from '@/utils/time.ts';
+import RelationshipGraph from '@/components/relationship-graph';
 
 export interface WorkloadDetailDrawerProps {
   open: boolean;
@@ -102,15 +104,8 @@ const WorkloadDetailDrawer: FC<WorkloadDetailDrawerProps> = (props) => {
     },
   ];
 
-  return (
-    <Drawer
-      title={i18nInstance.t('0af9d9af618327e912ac9f91bbe6a30f', '工作负载详情')}
-      placement="right"
-      open={open}
-      width={800}
-      loading={isDetailDataLoading}
-      onClose={onClose}
-    >
+  const basicInfoContent = (
+    <>
       <Card
         title={i18nInstance.t('9e5ffa068ed435ced73dc9bf5dd8e09c', '基本信息')}
         bordered
@@ -217,8 +212,48 @@ const WorkloadDetailDrawer: FC<WorkloadDetailDrawerProps> = (props) => {
           dataSource={eventsData?.events || []}
         />
       </Card>
+    </>
+  );
+
+  const relationshipsContent = (
+    <RelationshipGraph
+      deploymentName={name}
+      namespace={namespace}
+      relationships={(detailData as any)?.relationships}
+    />
+  );
+
+  const tabItems = [
+    {
+      key: 'basic',
+      label: i18nInstance.t('9e5ffa068ed435ced73dc9bf5dd8e09c', '基本信息'),
+      children: basicInfoContent,
+    },
+    ...(kind === WorkloadKind.Deployment
+      ? [
+          {
+            key: 'relationships',
+            label: 'Relationships',
+            children: relationshipsContent,
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <Drawer
+      title={i18nInstance.t('0af9d9af618327e912ac9f91bbe6a30f', '工作负载详情')}
+      placement="right"
+      open={open}
+      width={900}
+      loading={isDetailDataLoading}
+      onClose={onClose}
+    >
+      <Tabs defaultActiveKey="basic" items={tabItems} />
     </Drawer>
   );
 };
 
 export default WorkloadDetailDrawer;
+
+

@@ -20,6 +20,7 @@ import (
 	"context"
 	"log"
 
+	karmadaclientset "github.com/karmada-io/karmada/pkg/generated/clientset/versioned"
 	apps "k8s.io/api/apps/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -80,10 +81,13 @@ type DeploymentDetail struct {
 
 	// List of non-critical errors, that occurred during resource retrieval.
 	Errors []error `json:"errors"`
+
+	// Relationships holds the propagation chain for this deployment.
+	Relationships *ResourceRelationship `json:"relationships,omitempty"`
 }
 
 // GetDeploymentDetail returns model object of deployment and error, if any.
-func GetDeploymentDetail(client client.Interface, namespace string, deploymentName string) (*DeploymentDetail, error) {
+func GetDeploymentDetail(client client.Interface, karmadaClient karmadaclientset.Interface, namespace string, deploymentName string) (*DeploymentDetail, error) {
 	log.Printf("Getting details of %s deployment in %s namespace", deploymentName, namespace)
 
 	deployment, err := client.AppsV1().Deployments(namespace).Get(context.TODO(), deploymentName, metaV1.GetOptions{})
@@ -136,6 +140,8 @@ func GetDeploymentDetail(client client.Interface, namespace string, deploymentNa
 		}
 	}
 
+	relationships, _ := GetDeploymentRelationships(karmadaClient, deploymentName, namespace)
+
 	return &DeploymentDetail{
 		Deployment:            toDeployment(deployment, rawRs.Items, rawPods.Items, rawEvents.Items),
 		Selector:              deployment.Spec.Selector.MatchLabels,
@@ -146,6 +152,7 @@ func GetDeploymentDetail(client client.Interface, namespace string, deploymentNa
 		RollingUpdateStrategy: rollingUpdateStrategy,
 		RevisionHistoryLimit:  deployment.Spec.RevisionHistoryLimit,
 		Errors:                nonCriticalErrors,
+		Relationships:         relationships,
 	}, nil
 }
 

@@ -62,10 +62,23 @@ func GetDeploymentRelationships(karmadaClient karmadaclientset.Interface, deploy
 	}
 
 	// 1. Find PropagationPolicy by matching resourceSelectors
+	result.PropagationPolicy = findPropagationPolicy(karmadaClient, deploymentName, namespace)
+
+	// 2. Find ResourceBinding
+	result.ResourceBinding = findResourceBinding(karmadaClient, deploymentName, namespace)
+
+	// 3. Find Work resources referencing this deployment's ResourceBinding
+	if result.ResourceBinding != nil {
+		result.Works = findWorks(karmadaClient, result.ResourceBinding.Name)
+	}
+
+	return result, nil
+}
+
+func findPropagationPolicy(karmadaClient karmadaclientset.Interface, deploymentName, namespace string) *PropagationPolicyRef {
 	pps, err := karmadaClient.PolicyV1alpha1().PropagationPolicies(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		// non-fatal: return empty relationship
-		return result, nil
+		return nil
 	}
 	for _, pp := range pps.Items {
 		for _, rs := range pp.Spec.ResourceSelectors {
@@ -74,60 +87,58 @@ func GetDeploymentRelationships(karmadaClient karmadaclientset.Interface, deploy
 				if ns == "" {
 					ns = namespace
 				}
-				result.PropagationPolicy = &PropagationPolicyRef{
+				return &PropagationPolicyRef{
 					Name:      pp.Name,
 					Namespace: ns,
 				}
-				break
 			}
 		}
-		if result.PropagationPolicy != nil {
-			break
-		}
 	}
+	return nil
+}
 
-	// 2. Find ResourceBinding by label/name convention: <deploymentName>-deployment
+func findResourceBinding(karmadaClient karmadaclientset.Interface, deploymentName, namespace string) *ResourceBindingRef {
+	// Try finding by naming convention: <deploymentName>-deployment
 	bindingName := fmt.Sprintf("%s-deployment", deploymentName)
 	rb, err := karmadaClient.WorkV1alpha2().ResourceBindings(namespace).Get(context.TODO(), bindingName, metav1.GetOptions{})
 	if err == nil {
-		result.ResourceBinding = &ResourceBindingRef{
+		return &ResourceBindingRef{
 			Name:      rb.Name,
 			Namespace: rb.Namespace,
 		}
-	} else {
-		// Fallback: list all ResourceBindings and match by Spec.Resource
-		rbs, listErr := karmadaClient.WorkV1alpha2().ResourceBindings(namespace).List(context.TODO(), metav1.ListOptions{})
-		if listErr == nil {
-			for _, item := range rbs.Items {
-				ref := item.Spec.Resource
-				if ref.Kind == "Deployment" && ref.Name == deploymentName {
-					result.ResourceBinding = &ResourceBindingRef{
-						Name:      item.Name,
-						Namespace: item.Namespace,
-					}
-					break
+	}
+
+	// Fallback: list all ResourceBindings and match by Spec.Resource
+	rbs, listErr := karmadaClient.WorkV1alpha2().ResourceBindings(namespace).List(context.TODO(), metav1.ListOptions{})
+	if listErr == nil {
+		for _, item := range rbs.Items {
+			ref := item.Spec.Resource
+			if ref.Kind == "Deployment" && ref.Name == deploymentName {
+				return &ResourceBindingRef{
+					Name:      item.Name,
+					Namespace: item.Namespace,
 				}
 			}
 		}
 	}
+	return nil
+}
 
-	// 3. Find Work resources referencing this deployment's ResourceBinding
-	if result.ResourceBinding != nil {
-		works, werr := karmadaClient.WorkV1alpha1().Works("").List(context.TODO(), metav1.ListOptions{})
-		if werr == nil {
-			for _, w := range works.Items {
-				if owner, ok := w.Labels["resourcebinding.karmada.io/name"]; ok {
-					if owner == result.ResourceBinding.Name {
-						result.Works = append(result.Works, WorkRef{
-							Name:        w.Name,
-							Namespace:   w.Namespace,
-							ClusterName: w.Namespace, // namespace is the cluster name for Work
-						})
-					}
+func findWorks(karmadaClient karmadaclientset.Interface, bindingName string) []WorkRef {
+	works := []WorkRef{}
+	workList, werr := karmadaClient.WorkV1alpha1().Works("").List(context.TODO(), metav1.ListOptions{})
+	if werr == nil {
+		for _, w := range workList.Items {
+			if owner, ok := w.Labels["resourcebinding.karmada.io/name"]; ok {
+				if owner == bindingName {
+					works = append(works, WorkRef{
+						Name:        w.Name,
+						Namespace:   w.Namespace,
+						ClusterName: w.Namespace, // namespace is the cluster name for Work
+					})
 				}
 			}
 		}
 	}
-
-	return result, nil
+	return works
 }
